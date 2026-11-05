@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>es</string>
+		<string>pt-BR</string>
+		<string>de</string>
+		<string>fr</string>
+		<string>it</string>
+		<string>pl</string>
+		<string>tr</string>
+		<string>uk</string>
+		<string>ru</string>
+		<string>id</string>
+		<string>ko</string>
+		<string>zh-Hans</string>
+	</array>
+	<key>CFBundleExecutable</key>
+	<string>Needed</string>
+	<key>CFBundleIdentifier</key>
+	<string>me.lovearound.mac</string>
+	<key>CFBundleName</key>
+	<string>Love Around</string>
+	<key>CFBundleDisplayName</key>
+	<string>Love Around</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleVersion</key>
+	<string>__BUILD__</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>13.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://lovearound.me/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>DjYvKqLDv9QWvtvuX+CVRpcH4PdnZZEEKKJV7Tlvbb0=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUAutomaticallyUpdate</key>
+	<true/>
+	<key>SUScheduledCheckInterval</key>
+	<integer>3600</integer>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>me.lovearound.mac</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>lovearound</string>
+				<string>needed</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>
