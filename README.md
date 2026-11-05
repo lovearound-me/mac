@@ -83,6 +83,11 @@ confirm in Privacy & Security (steps are on the site).
 `publish.sh` releases `dist/LoveAround.dmg`; `https://lovearound.me/download/LoveAround.dmg`
 redirects to the latest release.
 
+Releases normally come from GitHub Actions: **Actions → Release → Run
+workflow** (or `gh workflow run release -R lovearound-me/mac`) builds, signs
+and notarizes on a macOS runner and publishes from Linux, with the same two
+scripts. The secrets it needs are listed in `.github/workflows/release.yml`.
+
 ## Updates
 
 [Sparkle](https://sparkle-project.org) 2, a SwiftPM dependency; `build.sh`

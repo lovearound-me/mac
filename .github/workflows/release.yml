@@ -1,0 +1,89 @@
+# Release: build, sign and notarize dist/LoveAround.dmg on macOS (build.sh),
+# then publish it with the signed Sparkle appcast as the GitHub release
+# v<version> (publish.sh, on Linux: it needs OpenSSL 3 and GNU tools).
+# Started by hand from the Actions tab ("Run workflow") or
+# `gh workflow run release -R lovearound-me/mac`; the version is
+# 0.2.<commit count>, build 100 + count, so release after the commits are in.
+#
+# Secrets:
+#   MAC_CERT_P12, MAC_CERT_PASSWORD   "Developer ID Application: … (CY8GRX7426)"
+#                                     with its private key, as base64 of a .p12
+#   APPLE_ID, APPLE_APP_PASSWORD      notarization: the Apple ID and an
+#                                     app-specific password (account.apple.com)
+#   SPARKLE_KEY                       the appcast's EdDSA key (sparkle_ed25519.pem);
+#                                     installed apps only take updates signed with it
+name: Release
+on: workflow_dispatch
+permissions:
+  contents: write
+concurrency: release
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the version is the commit count
+      - name: Check
+        run: python3 i18n/check.py
+      - name: Signing keychain
+        env:
+          P12: ${{ secrets.MAC_CERT_P12 }}
+          P12_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          for v in P12 P12_PASSWORD APPLE_ID APPLE_APP_PASSWORD; do
+            [ -n "${!v}" ] || { echo "::error::a signing secret is missing ($v)"; exit 1; }
+          done
+          KC="$RUNNER_TEMP/signing.keychain-db"
+          KC_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KC_PASSWORD" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PASSWORD" "$KC"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$KC_PASSWORD" "$KC" >/dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s "$KC"
+          xcrun notarytool store-credentials lovearound \
+            --apple-id "$APPLE_ID" --team-id CY8GRX7426 --password "$APPLE_APP_PASSWORD" --keychain "$KC"
+      - name: Build
+        run: ./build.sh
+      - name: Notarized?
+        run: |
+          read -r BUILD VERSION SIGNING < dist/LoveAround.version
+          [ "$SIGNING" = notarized ] || { echo "::error::$VERSION is $SIGNING, not notarized"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: |
+            dist/LoveAround.dmg
+            dist/LoveAround.version
+          retention-days: 7
+      - name: Drop the keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Sparkle key
+        run: |
+          [ -n "$KEY" ] || { echo "::error::secret SPARKLE_KEY is not set"; exit 1; }
+          printf '%s\n' "$KEY" > "$RUNNER_TEMP/sparkle_ed25519.pem"
+        env:
+          KEY: ${{ secrets.SPARKLE_KEY }}
+      - name: Publish
+        run: ./publish.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SPARKLE_KEY: ${{ runner.temp }}/sparkle_ed25519.pem
