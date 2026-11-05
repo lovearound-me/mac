@@ -117,7 +117,13 @@ if [[ -n "$SIGN_ID" ]]; then
       --keychain-profile "${NOTARY_PROFILE:-lovearound}" --wait
     # The ticket goes on the .dmg; the app inside is checked online. Sparkle
     # installs don't get the quarantine flag, so updates aren't checked at all.
-    xcrun stapler staple "$DIST/$DMG_NAME.dmg"
+    # The ticket comes from Apple's CloudKit, which drops connections now and
+    # then (error 68): retry before giving up.
+    for try in 1 2 3 4 5; do
+      xcrun stapler staple "$DIST/$DMG_NAME.dmg" && break
+      [[ $try == 5 ]] && exit 1
+      echo "   (staple failed, retrying in $((try * 15))s)"; sleep $((try * 15))
+    done
     spctl --assess --type open --context context:primary-signature -v "$DIST/$DMG_NAME.dmg"
     SIGNING=notarized
   fi
