@@ -1,0 +1,43 @@
+# Check signing: are the release secrets set and do they work? Prints only
+# "ok"/"missing" and what Apple and the keychain answer, never a value.
+# Imports the .p12 into a throwaway keychain and asks notarytool for the
+# submission history, which needs a valid Apple ID + app-specific password.
+name: Check signing
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: macos-15
+    steps:
+      - name: Check
+        env:
+          MAC_CERT_P12: ${{ secrets.MAC_CERT_P12 }}
+          MAC_CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          SPARKLE_KEY: ${{ secrets.SPARKLE_KEY }}
+        run: |
+          fail=0
+          for v in MAC_CERT_P12 MAC_CERT_PASSWORD APPLE_ID APPLE_APP_PASSWORD SPARKLE_KEY; do
+            if [ -n "${!v}" ]; then echo "$v: set"; else echo "::error::$v: missing or empty"; fail=1; fi
+          done
+          [ "$fail" = 0 ] || exit 1
+          KC="$RUNNER_TEMP/check.keychain-db"; KC_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KC_PASSWORD" "$KC"
+          security unlock-keychain -p "$KC_PASSWORD" "$KC"
+          echo "$MAC_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$MAC_CERT_PASSWORD" -T /usr/bin/codesign >/dev/null
+          rm "$RUNNER_TEMP/cert.p12"
+          echo "identities:"; security find-identity -v -p codesigning "$KC"
+          security find-identity -v -p codesigning "$KC" | grep -q 'Developer ID Application: .*(CY8GRX7426)' \
+            || { echo "::error::no Developer ID identity in MAC_CERT_P12"; fail=1; }
+          security delete-keychain "$KC"
+          if xcrun notarytool history --apple-id "$APPLE_ID" --team-id CY8GRX7426 --password "$APPLE_APP_PASSWORD" >/dev/null 2>"$RUNNER_TEMP/err"; then
+            echo "notarytool: Apple accepted the Apple ID and app-specific password"
+          else
+            echo "::error::notarytool rejected the credentials:"; sed 's/^/  /' "$RUNNER_TEMP/err"; fail=1
+          fi
+          printf '%s\n' "$SPARKLE_KEY" | openssl pkey -noout 2>/dev/null && echo "SPARKLE_KEY: a valid private key" \
+            || { echo "::error::SPARKLE_KEY is not a private key"; fail=1; }
+          exit $fail
