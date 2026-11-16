@@ -104,6 +104,7 @@ final class StatusBar: NSObject, NSPopoverDelegate {
     private let popover = NSPopover()
     private let model: AppModel
     private var tint: NSColor?
+    private var untint: Task<Void, Never>?
     var onCheckUpdates: () -> Void = {}
 
     init(model: AppModel) {
@@ -222,16 +223,17 @@ final class StatusBar: NSObject, NSPopoverDelegate {
         }
     }
 
-    /// The icon briefly takes the signal color when a signal arrives.
+    /// The icon briefly takes the signal color when a signal arrives. A new
+    /// signal starts the time over, even in the same color.
     func flashIcon(_ color: NSColor) {
         tint = color
         updateIcon()
-        Task { @MainActor in
+        untint?.cancel()
+        untint = Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_400_000_000)
-            if tint == color {
-                tint = nil
-                updateIcon()
-            }
+            guard !Task.isCancelled else { return }
+            tint = nil
+            updateIcon()
         }
     }
 }

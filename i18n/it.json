@@ -1,6 +1,7 @@
 {
   " · был онлайн {ago}": " · online {ago}",
   " · ещё не подключался": " · non si è ancora connesso",
+  "Love ID: {name}": "Love ID: {name}",
   "macOS не дал поменять автозапуск": "macOS non ha permesso di cambiare l’apertura al login",
   "{name} не увидит ни имя, ни цвет. Кружки можно переставлять перетаскиванием.": "{name} non vedrà né il nome né il colore. Puoi riordinare i cerchi trascinandoli.",
   "{name} не увидит ни имя, ни цвет: их видишь только ты.": "{name} non vedrà né il nome né il colore: li vedi solo tu.",
@@ -8,7 +9,10 @@
   "{n} мин": "{n} min",
   "{n} с": "{n} s",
   "{n} ч": "{n} h",
-  "{n} человек": {"one": "{n} persona", "other": "{n} persone"},
+  "{n} человек": {
+    "one": "{n} persona",
+    "other": "{n} persone"
+  },
   "{pause}. Сигналы не придут.": "{pause}. Non arriveranno segnali.",
   "«{name}» подключено": "«{name}» è connesso",
   "Аккаунт": "Account",
@@ -148,6 +152,7 @@
   "С «Без мигания и полёта» смайлики не летают.": "Con «Senza lampeggi né movimento» le emoji non volano.",
   "Свечение не чаще раза в": "Bagliore al massimo una volta ogni",
   "Сервер не ответил, попробуй ещё раз": "Il server non ha risposto, riprova",
+  "Сервер не принял вход, попробуй чуть позже": "Il server non ha accettato l’accesso, riprova tra poco",
   "Сердечки от кого-нибудь на свете": "Cuori da qualcuno nel mondo",
   "Сердечко": "Cuore",
   "Сердечко на паузе": "Cuore in pausa",
@@ -155,6 +160,7 @@
   "Скопировано": "Copiato",
   "Скопировать": "Copia",
   "Скопировать свой Love ID": "Copia il tuo Love ID",
+  "Скопировать ссылку": "Copia link",
   "Скопировать токен": "Copia il token",
   "Слишком много попыток, попробуй через час": "Troppi tentativi, riprova tra un’ora",
   "Слишком много попыток, попробуй чуть позже": "Troppi tentativi, riprova tra poco",
@@ -168,6 +174,7 @@
   "Сохраняем…": "Salvataggio…",
   "Ссылка в порядке. Осталось подписать.": "Il link va bene. Ora dagli un nome.",
   "Ссылка-приглашение": "Link di invito",
+  "Ссылкой делись с теми, кого знает {name}.": "Condividi il link con chi {name} conosce.",
   "Твой Love ID": "Il tuo Love ID",
   "Тихий звук": "Suono leggero",
   "Тихо, когда что-то на весь экран": "Silenzio quando qualcosa è a schermo intero",

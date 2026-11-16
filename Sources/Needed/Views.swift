@@ -166,58 +166,14 @@ extension Banner where Trailing == EmptyView {
 /// Sharing lives in the menu; on a Mac the link mostly goes into a chat by hand.
 struct InviteRow: View {
     @EnvironmentObject var model: AppModel
-    @State private var copied = false
-    @State private var hovering = false
 
     static let message = tr("Добавь меня по этой ссылке и нажимай сердечко, когда думаешь обо мне ♥")
 
     var body: some View {
         if let link = model.inviteURL {
-            Button(action: copy) {
-                HStack(spacing: 10) {
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.link)
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color.link.opacity(0.14)))
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(tr("Твой Love ID"))
-                            .font(.system(size: 11))
-                            .foregroundColor(.muted)
-                        Text(Self.shown(link))
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-
-                    Spacer(minLength: 6)
-
-                    HStack(spacing: 4) {
-                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                        if copied || hovering {
-                            Text(copied ? tr("Скопировано") : tr("Скопировать"))
-                        }
-                    }
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundColor(.link)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.field)
-                        .overlay(RoundedRectangle(cornerRadius: 10).fill(Color.link.opacity(hovering ? 0.06 : 0)))
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 10))
-            }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .animation(.easeOut(duration: 0.15), value: hovering)
-            .animation(.easeOut(duration: 0.15), value: copied)
-            .help(tr("Кто добавит тебя по этой ссылке, сможет нажимать, когда думает о тебе"))
-            .accessibilityLabel(tr("Скопировать свой Love ID"))
+            LinkCard(link: link, caption: tr("Твой Love ID"),
+                     help: tr("Кто добавит тебя по этой ссылке, сможет нажимать, когда думает о тебе"),
+                     accessibility: tr("Скопировать свой Love ID"))
         }
     }
 
@@ -226,9 +182,69 @@ struct InviteRow: View {
         link.replacingOccurrences(of: "https://", with: "")
             .replacingOccurrences(of: "http://", with: "")
     }
+}
+
+/// A Love ID link as one quiet card, copied on a click: the own one, or a
+/// contact's to pass on.
+struct LinkCard: View {
+    @EnvironmentObject var model: AppModel
+    let link: String
+    let caption: String
+    let help: String
+    let accessibility: String
+    @State private var copied = false
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: copy) {
+            HStack(spacing: 10) {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.link)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Color.link.opacity(0.14)))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(caption)
+                        .font(.system(size: 11))
+                        .foregroundColor(.muted)
+                    Text(InviteRow.shown(link))
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer(minLength: 6)
+
+                HStack(spacing: 4) {
+                    Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    if copied || hovering {
+                        Text(copied ? tr("Скопировано") : tr("Скопировать"))
+                    }
+                }
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundColor(.link)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.field)
+                    .overlay(RoundedRectangle(cornerRadius: 10).fill(Color.link.opacity(hovering ? 0.06 : 0)))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+        .animation(.easeOut(duration: 0.15), value: copied)
+        .help(help)
+        .accessibilityLabel(accessibility)
+    }
 
     private func copy() {
-        guard model.copyInvite() else { return }
+        model.copy(link)
         copied = true
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 1_500_000_000)
@@ -724,6 +740,14 @@ struct PersonPage: View {
             }
 
             Note(tr("{name} не увидит ни имя, ни цвет: их видишь только ты.", ["name": label.isEmpty ? contact.label : label]))
+
+            if let link = contact.invite_url {
+                VStack(alignment: .leading, spacing: 8) {
+                    LinkCard(link: link, caption: tr("Love ID: {name}", ["name": label.isEmpty ? contact.label : label]),
+                             help: tr("Скопировать ссылку"), accessibility: tr("Скопировать ссылку"))
+                    Note(tr("Ссылкой делись с теми, кого знает {name}.", ["name": label.isEmpty ? contact.label : label]))
+                }
+            }
 
             Spacer(minLength: 0)
 

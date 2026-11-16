@@ -12,6 +12,9 @@ struct DevicesView: View {
     @State private var busy = false
     @State private var error: String?
     @State private var confirmRemove: String?
+    /// The one being removed: a second click mustn't send a second DELETE,
+    /// which would find it gone and say it failed.
+    @State private var removing: String?
     @State private var copied: String?
 
     var body: some View {
@@ -96,6 +99,7 @@ struct DevicesView: View {
             if confirmRemove == device.id {
                 Button(tr("Нет")) { confirmRemove = nil }.buttonStyle(.plain).foregroundColor(.muted)
                 Button(tr("Отключить")) { remove(device) }.buttonStyle(.plain).foregroundColor(.danger)
+                    .disabled(removing == device.id)
             } else {
                 IconButton(symbol: "trash", help: tr("Отключить")) { confirmRemove = device.id }
                     .foregroundColor(.muted)
@@ -160,7 +164,10 @@ struct DevicesView: View {
     }
 
     private func remove(_ device: Device) {
+        guard removing == nil else { return }
+        removing = device.id
         Task {
+            defer { removing = nil }
             do {
                 try await model.api.deleteDevice(device.id)
                 devices.removeAll { $0.id == device.id }
@@ -171,15 +178,13 @@ struct DevicesView: View {
         }
     }
 
+    /// A token is a password for the board: not to other Macs through
+    /// Universal Clipboard, and marked so clipboard managers don't keep it.
     private func copy(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        let board = NSPasteboard.general
+        board.prepareForNewContents(with: .currentHostOnly)
+        board.setString(text, forType: .string)
+        board.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType"))
         copied = text
-    }
-}
-
-private extension String {
-    var capitalizedFirst: String {
-        prefix(1).uppercased() + dropFirst()
     }
 }

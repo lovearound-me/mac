@@ -150,22 +150,16 @@ final class Auth {
     }
 
     /// lovearound://signin?state=…&epk=…&box=…, the box holding uid, email and
-    /// the refresh token. The site before the box sent them in the clear
-    /// (needed://signin?state=…&uid=…&email=…&rt=…); that is still accepted
-    /// until the site with the box is published.
+    /// the refresh token. Only the box: the page sends them in the clear just
+    /// to builds that open it without key=, and this one always sends a key.
     func completeGoogle(_ url: URL) async throws {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let q = Dictionary(items.map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { a, _ in a })
         // The state proves the callback answers our own request, so a crafted
         // link cannot sign the app into someone else's account.
         guard let state = googleState, q["state"] == state else { throw AuthError.server("BAD_CALLBACK") }
-        let sealed: SignInKey.Sealed?
-        if let box = q["box"] {
-            sealed = googleKey?.open(epk: q["epk"] ?? "", box: box, state: state)
-        } else {
-            sealed = SignInKey.Sealed(uid: q["uid"] ?? "", email: q["email"], rt: q["rt"] ?? "")
-        }
-        guard let sealed, !sealed.uid.isEmpty, !sealed.rt.isEmpty else { throw AuthError.server("BAD_CALLBACK") }
+        guard let sealed = googleKey?.open(epk: q["epk"] ?? "", box: q["box"] ?? "", state: state),
+              !sealed.uid.isEmpty, !sealed.rt.isEmpty else { throw AuthError.server("BAD_CALLBACK") }
         googleState = nil
         googleKey = nil
         adopt(Session(uid: sealed.uid, email: sealed.email, refreshToken: sealed.rt))
@@ -188,10 +182,19 @@ final class Auth {
         save()
     }
 
+    /// Readable by this user only from the first byte: a new file opened 0600,
+    /// then renamed over the old one (atomic, and fine with no old file yet).
     private func save() {
         guard let session, let data = try? JSONEncoder().encode(session) else { return }
-        try? data.write(to: file, options: .atomic)
-        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        let temp = file.deletingLastPathComponent().appendingPathComponent(".session-\(UUID().uuidString).json")
+        let fd = open(temp.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        guard fd >= 0 else { return }
+        let handle = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+        let written = (try? handle.write(contentsOf: data)) != nil
+        try? handle.close()
+        if !written || rename(temp.path, file.path) != 0 {
+            try? FileManager.default.removeItem(at: temp)
+        }
     }
 
     private static func post(_ method: String, _ body: [String: Any]) async throws -> [String: Any] {

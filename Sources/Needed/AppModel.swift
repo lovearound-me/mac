@@ -150,6 +150,8 @@ final class AppModel: ObservableObject {
             problem = nil
         } catch let error as AuthError where error.endsSession {
             signOut()
+        } catch let error as APIError where error.status == 401 {
+            problem = error.localizedDescription
         } catch {
             problem = tr("Нет связи с сервером. Попробуем ещё раз чуть позже.")
         }
@@ -191,6 +193,9 @@ final class AppModel: ObservableObject {
                 sent = nil
                 signOut()
                 problem = tr("Нужно войти заново")
+            } catch let error as APIError where error.status == 401 {
+                sent = nil
+                problem = error.localizedDescription
             } catch {
                 sent = nil
                 problem = tr("Не улетело, проверь интернет")
@@ -216,9 +221,12 @@ final class AppModel: ObservableObject {
                 problem = tr("Нужно войти заново")
             } catch let error as APIError where error.status == 429 {
                 // Sent from another device this hour, at a time not known
-                // here: wait a whole hour from now, a little longer than needed.
+                // here: wait about an hour from now. Two minutes back, so the
+                // circle doesn't say "Улетело кому-то" for a signal sent elsewhere.
                 anyoneSentAt = Date().addingTimeInterval(-120)
                 problem = nil
+            } catch let error as APIError where error.status == 401 {
+                problem = error.localizedDescription
             } catch {
                 problem = tr("Не улетело, проверь интернет")
             }
@@ -451,12 +459,9 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// For the button of a board that sends to this person (/docs).
-    func copyInvite() -> Bool {
-        guard let inviteURL else { return false }
+    func copy(_ text: String) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(inviteURL, forType: .string)
-        return true
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     /// The code of an invite link on the clipboard, unless it is this user's own.
@@ -476,7 +481,10 @@ final class AppModel: ObservableObject {
                 text = String(text[range.upperBound...])
             }
         }
-        text = text.components(separatedBy: CharacterSet(charactersIn: "/?#")).first ?? ""
+        // The link ends at a space, a new line or a dot after it in a message:
+        // "…/i/GSSV7-A33HN.", "…/i/GSSV7-A33HN\nДобавь меня…".
+        text = text.components(separatedBy: CharacterSet(charactersIn: "/?#").union(.whitespacesAndNewlines)).first ?? ""
+        text = text.trimmingCharacters(in: CharacterSet.punctuationCharacters.union(.symbols))
         // 10 characters of the server's alphabet, dashes anywhere (`GSSV7-A33HN`).
         // The server never says whether a code is taken, so this is the only
         // check a typo gets: no 0, 1, I, L, O or U.
@@ -567,6 +575,9 @@ final class AppModel: ObservableObject {
         try await api.deleteMe()
         contactColors = [:]
         lastSent = [:]
+        // Not carried over to an account made here next.
+        pausedUntil = nil
+        anyoneSentAt = nil
         signOut()
     }
 

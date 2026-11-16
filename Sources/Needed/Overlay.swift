@@ -163,11 +163,28 @@ final class Overlay {
             group.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 0.7, 0.3, 1)
             group.fillMode = .both
             group.isRemovedOnCompletion = false
+            // Gone once it has flown: with signals every second the window is
+            // never hidden, and every emoji would stay on it until then.
+            group.delegate = RemoveWhenDone(layer)
 
             root.addSublayer(layer)
             layer.add(group, forKey: "rise")
         }
         return end
+    }
+}
+
+/// Takes an emoji off the screen when its flight ends. The animation holds
+/// its delegate, so nothing else has to keep this alive.
+private final class RemoveWhenDone: NSObject, CAAnimationDelegate {
+    private weak var layer: CALayer?
+
+    init(_ layer: CALayer) {
+        self.layer = layer
+    }
+
+    func animationDidStop(_ anim: CAAnimation, finished flag: Bool) {
+        layer?.removeFromSuperlayer()
     }
 }
 

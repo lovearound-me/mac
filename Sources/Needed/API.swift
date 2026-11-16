@@ -8,6 +8,11 @@ struct Contact: Codable, Identifiable, Equatable {
     var position: Int
     /// Optional: a server older than the field leaves it out.
     var close: Bool?
+    /// The person's Love ID link, to pass on to people who know them: the one
+    /// it was added by, as typed. Missing only for contacts added before the
+    /// server kept it. A wrong code comes back too, so a link never tells
+    /// whether its code belongs to anyone.
+    var invite_url: String?
 
     /// A close person: a circle on top of the menu, first on a board.
     var isClose: Bool { close ?? false }
@@ -39,6 +44,7 @@ enum APIError: LocalizedError {
         if case .status(400, "not an invite code") = self { return tr("Не похоже на ссылку-приглашение") }
         if case .status(400, "too many contacts") = self { return tr("В списке уже 200 человек") }
         switch status {
+        case 401: return tr("Сервер не принял вход, попробуй чуть позже")
         case 404: return tr("Не нашли")
         case 409: return tr("Уже есть в списке")
         case 429: return tr("Слишком много попыток, попробуй через час")
@@ -125,6 +131,9 @@ final class API {
             }
             let (data, resp) = try await URLSession.shared.data(for: req)
             let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            // Once more with a fresh token. Refused again, it stays a 401 and
+            // the session is kept: Firebase has just renewed it, so the fault
+            // is on the server's side, and signing out would not mend it.
             if status == 401 && attempt == 0 {
                 continue
             }
