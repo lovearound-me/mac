@@ -38,6 +38,12 @@ struct Me: Codable {
 enum APIError: LocalizedError {
     case status(Int, String)
 
+    /// A 13th close person: "Рядом" holds 12.
+    var tooManyClose: Bool {
+        if case .status(409, "too many close") = self { return true }
+        return false
+    }
+
     var status: Int {
         if case .status(let code, _) = self { return code }
         return 0
@@ -47,6 +53,7 @@ enum APIError: LocalizedError {
         if case .status(400, "that is your own invite") = self { return tr("Это твоя собственная ссылка") }
         if case .status(400, "not an invite code") = self { return tr("Не похоже на ссылку-приглашение") }
         if case .status(400, "too many contacts") = self { return tr("В списке уже 200 человек") }
+        if tooManyClose { return tr("Рядом уже 12 человек: сначала убери кого-нибудь.") }
         switch status {
         case 401: return tr("Сервер не принял вход, попробуй чуть позже")
         case 404: return tr("Не нашли")

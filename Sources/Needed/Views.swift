@@ -514,6 +514,8 @@ struct BookView: View {
     @EnvironmentObject var selection: BookSelection
     @State private var query = ""
     @State private var adding = false
+    /// A drag into a full "Рядом", said under its heading.
+    @State private var refused = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -624,6 +626,12 @@ struct BookView: View {
                     .foregroundColor(.faint)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if near && refused {
+                Text(tr("Рядом уже 12 человек: сначала убери кого-нибудь."))
+                    .font(.system(size: 11.5))
+                    .foregroundColor(.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(.top, near ? 2 : 12)
         .padding(.bottom, 2)
@@ -651,8 +659,9 @@ struct BookView: View {
         withAnimation(.easeOut(duration: 0.15)) {
             if at < line {
                 let index = after[..<at].filter { if case .person = $0 { return true } else { return false } }.count
-                model.place(person, closeAt: index)
+                refused = !model.place(person, closeAt: index)
             } else {
+                refused = false
                 model.place(person, closeAt: nil)
             }
         }

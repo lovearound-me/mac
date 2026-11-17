@@ -340,9 +340,16 @@ final class AppModel: ObservableObject {
         contacts.sorted { $0.label.localizedStandardCompare($1.label) == .orderedAscending }
     }
 
-    /// New contacts start among the close ones until there are a couple of rows of them.
+    /// "Рядом" holds 12 at most: the server refuses a 13th.
+    static let maxClose = 12
+
+    var closeFull: Bool {
+        closeContacts.count >= Self.maxClose
+    }
+
+    /// New contacts start among the close ones while there is room.
     var newContactIsClose: Bool {
-        closeContacts.count < 10
+        !closeFull
     }
 
     /// A contact's color is kept on the contact, so every device shows the same one.
@@ -389,7 +396,7 @@ final class AppModel: ObservableObject {
             do {
                 try await api.updateContact(contact.id, close: close)
             } catch {
-                problem = tr("Не получилось сохранить")
+                problem = (error as? APIError)?.tooManyClose == true ? error.localizedDescription : tr("Не получилось сохранить")
                 await reload()
             }
         }
@@ -412,17 +419,22 @@ final class AppModel: ObservableObject {
     }
 
     /// A drag in the book: into "Рядом" at this place among the circles,
-    /// or out of it with nil.
-    func place(_ contact: Contact, closeAt index: Int?) {
+    /// or out of it with nil. False when "Рядом" is full: nothing changes.
+    @discardableResult
+    func place(_ contact: Contact, closeAt index: Int?) -> Bool {
         guard let index else {
             if contact.isClose { setClose(contact, false) }
-            return
+            return true
         }
-        if !contact.isClose { setClose(contact, true) }
+        if !contact.isClose {
+            guard !closeFull else { return false }
+            setClose(contact, true)
+        }
         var close = closeContacts.filter { $0.id != contact.id }
-        guard let person = contacts.first(where: { $0.id == contact.id }) else { return }
+        guard let person = contacts.first(where: { $0.id == contact.id }) else { return false }
         close.insert(person, at: min(index, close.count))
         reorderClose(close)
+        return true
     }
 
     /// Shown at once; saved a moment after the last change, so a drag across
