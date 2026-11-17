@@ -789,7 +789,7 @@ struct PersonPage: View {
         .frame(maxWidth: 460, maxHeight: .infinity, alignment: .topLeading)
         .onAppear {
             name = contact.label
-            color = colorIndex(contact)
+            color = contact.color ?? 0
         }
         .onChange(of: name) { _ in
             typing?.cancel()
@@ -799,6 +799,10 @@ struct PersonPage: View {
             }
         }
         .onChange(of: color) { _ in save() }
+        // Repainted on another device: shown here unless a save is on its way.
+        .onChange(of: model.contacts.first(where: { $0.id == contact.id })?.color) { saved in
+            if status != .saving, let saved { color = saved }
+        }
         .onDisappear {
             typing?.cancel()
             save()
@@ -809,14 +813,10 @@ struct PersonPage: View {
         name.trimmingCharacters(in: .whitespaces)
     }
 
-    private func colorIndex(_ contact: Contact) -> Int {
-        Palette.all.indices.first { Palette.at($0).color == model.color(for: contact).color } ?? 0
-    }
-
     private func save() {
         guard (1...64).contains(label.count),
               let current = model.contacts.first(where: { $0.id == contact.id }),
-              label != current.label || color != colorIndex(current) else { return }
+              label != current.label || color != (current.color ?? 0) else { return }
         let (label, color) = (label, color)
         status = .saving
         error = nil
@@ -1127,12 +1127,12 @@ struct ContactForm: View {
             case .add(let invite):
                 // Copied from a message a moment ago: no need to paste it.
                 if let invite = invite ?? model.pastedInvite { link = "\(Config.site)/i/\(invite)" }
-                color = model.nextColor
+                color = model.freeColor
                 close = model.newContactIsClose
             case .edit(let contact):
                 name = contact.label
                 close = contact.isClose
-                color = Palette.all.indices.first { Palette.at($0).color == model.color(for: contact).color } ?? 0
+                color = contact.color ?? 0
             }
         }
         .onChange(of: link) { link in

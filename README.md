@@ -25,8 +25,9 @@ settings and moves the session over on the first launch.
   color, with a mix of hearts, hugs, cats, flowers and more floating up. The
   receiver never learns who sent it.
 - The popover and the windows follow the system's light or dark appearance (`Palette.swift`).
-- Contact colors and the user's signal color live in `UserDefaults` on this
-  Mac only — the server stores no colors (see the API docs at [lovearound.me/docs](https://lovearound.me/docs)).
+- A contact's color is kept on the server with the contact, so every device
+  and the Telegram bot show the same one; the user's own signal color lives in
+  `UserDefaults` on this Mac only (see the API docs at [lovearound.me/docs](https://lovearound.me/docs)).
 
 ## Layout
 

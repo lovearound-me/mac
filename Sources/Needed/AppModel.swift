@@ -61,7 +61,6 @@ final class AppModel: ObservableObject {
     /// When this Mac last sent a signal to anyone: one an hour.
     @Published private(set) var anyoneSentAt: Date? { didSet { defaults.set(anyoneSentAt, forKey: "anyoneSentAt") } }
     @Published private(set) var anyoneSending = false
-    @Published private(set) var contactColors: [String: Int] { didSet { defaults.set(contactColors, forKey: "contactColors") } }
     /// When each contact was last sent a signal from this Mac, for "Недавние".
     private var lastSent: [String: Date] { didSet { defaults.set(lastSent, forKey: "lastSent") } }
     @Published private(set) var pausedUntil: Date? {
@@ -101,7 +100,7 @@ final class AppModel: ObservableObject {
         minGap = Self.gaps[Self.gapIndex(defaults.object(forKey: "minGap") as? TimeInterval ?? 1)]
         acceptAnyone = defaults.object(forKey: "acceptAnyone") as? Bool ?? true
         anyoneSentAt = defaults.object(forKey: "anyoneSentAt") as? Date
-        contactColors = defaults.dictionary(forKey: "contactColors") as? [String: Int] ?? [:]
+        defaults.removeObject(forKey: "contactColors") // kept on the server now
         lastSent = defaults.dictionary(forKey: "lastSent") as? [String: Date] ?? [:]
         pausedUntil = defaults.object(forKey: "pausedUntil") as? Date
 
@@ -346,33 +345,37 @@ final class AppModel: ObservableObject {
         closeContacts.count < 10
     }
 
+    /// A contact's color is kept on the contact, so every device shows the same one.
     func color(for contact: Contact) -> PaletteColor {
-        if let index = contactColors[contact.id] { return Palette.at(index) }
-        return Palette.at(contacts.firstIndex(of: contact) ?? 0)
+        Palette.at(contact.color ?? 0)
     }
 
-    /// The first color not yet used, for a new contact.
-    var nextColor: Int {
-        let used = Set(contacts.map { contactColors[$0.id] ?? -1 })
-        return Palette.all.indices.first { !used.contains($0) } ?? contacts.count % Palette.all.count
+    /// For a new contact, as the server picks: a color nobody in the book has
+    /// yet, at random; any one once all are taken.
+    var freeColor: Int {
+        let used = Set(contacts.compactMap(\.color))
+        let free = Palette.all.indices.filter { !used.contains($0) }
+        return (free.isEmpty ? Array(Palette.all.indices) : free).randomElement() ?? 0
     }
 
     func addContact(code: String, label: String, color: Int, close: Bool) async throws {
-        let contact = try await api.addContact(code: code, label: label, close: close)
-        contactColors[contact.id] = color
+        var contact = try await api.addContact(code: code, label: label, close: close, color: color)
+        contact.color = contact.color ?? color
         contacts.append(contact)
     }
 
     func updateContact(_ contact: Contact, label: String, color: Int, close: Bool) async throws {
-        if label != contact.label || close != contact.isClose {
+        let colorChanged = color != (contact.color ?? 0)
+        if label != contact.label || close != contact.isClose || colorChanged {
             try await api.updateContact(contact.id,
                                         label: label != contact.label ? label : nil,
-                                        close: close != contact.isClose ? close : nil)
+                                        close: close != contact.isClose ? close : nil,
+                                        color: colorChanged ? color : nil)
         }
-        contactColors[contact.id] = color
         if let index = contacts.firstIndex(where: { $0.id == contact.id }) {
             contacts[index].label = label
             contacts[index].close = close
+            contacts[index].color = color
         }
     }
 
@@ -395,7 +398,6 @@ final class AppModel: ObservableObject {
     func remove(_ contact: Contact) async throws {
         try await api.deleteContact(contact.id)
         contacts.removeAll { $0.id == contact.id }
-        contactColors[contact.id] = nil
         lastSent[contact.id] = nil
     }
 
@@ -573,7 +575,6 @@ final class AppModel: ObservableObject {
 
     func deleteAccount() async throws {
         try await api.deleteMe()
-        contactColors = [:]
         lastSent = [:]
         // Not carried over to an account made here next.
         pausedUntil = nil

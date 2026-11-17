@@ -13,6 +13,10 @@ struct Contact: Codable, Identifiable, Equatable {
     /// server kept it. A wrong code comes back too, so a link never tells
     /// whether its code belongs to anyone.
     var invite_url: String?
+    /// The owner's color for them, an index into `Palette`, kept on the server so
+    /// every device shows the same one. Optional: a server older than the field
+    /// leaves it out.
+    var color: Int?
 
     /// A close person: a circle on top of the menu, first on a board.
     var isClose: Bool { close ?? false }
@@ -72,15 +76,16 @@ final class API {
     }
 
     /// Always answers the same whether or not the code belongs to anyone.
-    func addContact(code: String, label: String, close: Bool) async throws -> Contact {
-        try decode(Contact.self, try await request("POST", "v1/contacts", body: ["code": code, "label": label, "close": close]))
+    func addContact(code: String, label: String, close: Bool, color: Int) async throws -> Contact {
+        try decode(Contact.self, try await request("POST", "v1/contacts", body: ["code": code, "label": label, "close": close, "color": color]))
     }
 
-    func updateContact(_ id: String, label: String? = nil, position: Int? = nil, close: Bool? = nil) async throws {
+    func updateContact(_ id: String, label: String? = nil, position: Int? = nil, close: Bool? = nil, color: Int? = nil) async throws {
         var body: [String: Any] = [:]
         if let label { body["label"] = label }
         if let position { body["position"] = position }
         if let close { body["close"] = close }
+        if let color { body["color"] = color }
         _ = try await request("PATCH", "v1/contacts/\(id)", body: body)
     }
 
