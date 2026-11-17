@@ -89,6 +89,14 @@ workflow** (or `gh workflow run release -R lovearound-me/mac`) builds, signs
 and notarizes on a macOS runner and publishes from Linux, with the same two
 scripts. The secrets it needs are listed in `.github/workflows/release.yml`.
 
+The release page says what changed: `publish.sh` lists every
+`Release-note: …` line in the messages of the commits since the last release,
+oldest first. So a commit people would notice carries one line per change,
+written for them (e.g. `Release-note: A contact's color is the same on every
+device.`), and one they wouldn't (keys, CI, refactoring) carries none; a
+squash-merged PR keeps its line when it is in the merge message. A release
+with no such line says "Small fixes under the hood." and warns in the run.
+
 ## Updates
 
 [Sparkle](https://sparkle-project.org) 2, a SwiftPM dependency; `build.sh`
