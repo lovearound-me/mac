@@ -68,7 +68,7 @@ settings and moves the session over on the first launch.
 ```sh
 xcode-select --install   # Command Line Tools, Swift 5.9+
 ./build.sh               # → dist/Love Around.app, dist/LoveAround.dmg
-./publish.sh             # → the GitHub release v0.2.<N> + appcast
+./publish.sh             # → the GitHub release v0.2.<N> + appcast (the key: only in CI)
 ```
 
 With a "Developer ID Application" identity in the login keychain, `build.sh`
@@ -105,8 +105,10 @@ soon as the app isn't the active one, then relaunches.
 but `notarized` unless `ALLOW_UNNOTARIZED=1`, makes the GitHub release
 `v<version>` of this repository with the dmg and an appcast that points at it,
 and signs the dmg
-with the EdDSA key in `~/.config/lovearound/sparkle_ed25519.pem` on the
-publishing machine. The public half is `SUPublicEDKey`. Lose the key and the
-installed apps can't be updated any more, so it has a backup copy elsewhere.
+with the EdDSA key from the environment (`SPARKLE_KEY`). The private key is
+only in the GitHub secret `SPARKLE_KEY` and in the owner's password manager,
+never in a file on a dev machine, so releases go through the workflow. The
+public half is `SUPublicEDKey`. Lose the key and the installed apps can't be
+updated any more.
 lovearound.me/download/appcast.xml and /download/LoveAround.dmg redirect to
 the latest release (firebase.json in the site repo).

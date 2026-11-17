@@ -10,7 +10,8 @@
 #                                     with its private key, as base64 of a .p12
 #   APPLE_ID, APPLE_APP_PASSWORD      notarization: the Apple ID and an
 #                                     app-specific password (account.apple.com)
-#   SPARKLE_KEY                       the appcast's EdDSA key (sparkle_ed25519.pem);
+#   SPARKLE_KEY                       the appcast's EdDSA key (PEM), whose only other
+#                                     copy is in the owner's password manager;
 #                                     installed apps only take updates signed with it
 name: Release
 on: workflow_dispatch
@@ -76,14 +77,11 @@ jobs:
         with:
           name: dist
           path: dist
-      - name: Sparkle key
-        run: |
-          [ -n "$KEY" ] || { echo "::error::secret SPARKLE_KEY is not set"; exit 1; }
-          printf '%s\n' "$KEY" > "$RUNNER_TEMP/sparkle_ed25519.pem"
-        env:
-          KEY: ${{ secrets.SPARKLE_KEY }}
+      # The key stays in the environment of this one step, never in a file.
       - name: Publish
-        run: ./publish.sh
+        run: |
+          [ -n "$SPARKLE_KEY" ] || { echo "::error::secret SPARKLE_KEY is not set"; exit 1; }
+          ./publish.sh
         env:
           GH_TOKEN: ${{ github.token }}
-          SPARKLE_KEY: ${{ runner.temp }}/sparkle_ed25519.pem
+          SPARKLE_KEY: ${{ secrets.SPARKLE_KEY }}

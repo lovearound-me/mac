@@ -8,10 +8,12 @@
 # /download/LoveAround.dmg redirect to the latest release (firebase.json in
 # the site repo); the appcast points at this release's dmg.
 #
-# The appcast is signed with the EdDSA key at $SPARKLE_KEY; its public half is
-# SUPublicEDKey in Resources/Info.plist. Without that key no update can reach
-# the installed apps, so keep a copy of it elsewhere. Signing uses OpenSSL 3
-# (pkeyutl -rawin): run this where the key is, after copying dist/ there.
+# The appcast is signed with the EdDSA key in the environment, SPARKLE_KEY
+# (the PEM itself): the release workflow passes its GitHub secret. The key is
+# kept nowhere else but the owner's password manager, never in a file, so
+# releases go through the workflow; its public half is SUPublicEDKey in
+# Resources/Info.plist. Without it no update can reach the installed apps.
+# Signing uses OpenSSL 3 (pkeyutl -rawin).
 #
 # Only a notarized build is released (the third field of
 # dist/LoveAround.version, written by build.sh). ALLOW_UNNOTARIZED=1 releases
@@ -21,15 +23,15 @@
 # tagged at HEAD, so push first.
 #
 #   REPO=…          the GitHub repository (default: lovearound-me/mac)
-#   SPARKLE_KEY=…   default: ~/.config/lovearound/sparkle_ed25519.pem
+#   SPARKLE_KEY=…   the private key, PEM (in the workflow, its secret)
 #
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 REPO="${REPO:-lovearound-me/mac}"
-SPARKLE_KEY="${SPARKLE_KEY:-$HOME/.config/lovearound/sparkle_ed25519.pem}"
+[[ -n "${SPARKLE_KEY:-}" ]] || { echo ">> no SPARKLE_KEY: releases are signed in the GitHub workflow"; exit 1; }
 
 DMG=dist/LoveAround.dmg
-for f in "$DMG" dist/LoveAround.version "$SPARKLE_KEY"; do
+for f in "$DMG" dist/LoveAround.version; do
   [[ -f "$f" ]] || { echo ">> no $f"; exit 1; }
 done
 read -r BUILD VERSION SIGNING < dist/LoveAround.version
@@ -45,7 +47,8 @@ fi
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 cp "$DMG" "$STAGE/LoveAround.dmg"
-SIGNATURE="$(openssl pkeyutl -sign -rawin -inkey "$SPARKLE_KEY" -in "$DMG" | base64 -w0)"
+# The key reaches openssl through a pipe: on no command line, in no file.
+SIGNATURE="$(openssl pkeyutl -sign -rawin -inkey <(printf '%s\n' "$SPARKLE_KEY") -in "$DMG" | base64 -w0)"
 cat > "$STAGE/appcast.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
