@@ -5,8 +5,10 @@ enum Config {
     static let apiBase = URL(string: "https://api.lovearound.me")!
     /// Firebase Web API key: public, identifies the project to Firebase Auth.
     static let firebaseAPIKey = "AIzaSyBZJfln_KXsxRxo3fvVaV1ePmiVUIn5YXY"
-    /// The site: install page, invite links /i/<code>, Google sign-in bridge /signin/.
+    /// The site: install page, invite links /i/<code>, the sign-in page /signin/.
     static let site = "https://lovearound.me"
+    /// The web app's «Способы входа»: adding Apple, Google or a password to the account.
+    static let signInMethods = URL(string: "https://app.lovearound.me/#/settings/signin")!
     /// Links the app opens: lovearound://add/<code>, lovearound://signin?….
     static let urlScheme = "lovearound"
     /// Plus the codename's needed://, which older builds of the site still send.

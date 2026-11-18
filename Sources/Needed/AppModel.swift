@@ -23,6 +23,8 @@ final class AppModel: ObservableObject {
 
     @Published private(set) var signedIn = false
     @Published private(set) var email: String?
+    /// How this session signed in: "apple.com", "google.com" or "password".
+    @Published private(set) var provider: String?
     @Published private(set) var myUID: String?
     @Published private(set) var inviteURL: String?
     @Published private(set) var contacts: [Contact] = []
@@ -145,6 +147,7 @@ final class AppModel: ObservableObject {
             let me = try await api.me()
             myUID = me.uid
             inviteURL = me.invite_url
+            provider = auth.provider
             contacts = try await api.contacts()
             problem = nil
         } catch let error as AuthError where error.endsSession {
@@ -529,7 +532,7 @@ final class AppModel: ObservableObject {
             if signedIn && !waitingForBrowser { return }
             Task {
                 do {
-                    try await auth.completeGoogle(url)
+                    try await auth.completeSignIn(url)
                     didSignIn()
                 } catch {
                     // Unless it's a copy that lost the race to the first one.
@@ -545,18 +548,16 @@ final class AppModel: ObservableObject {
 
     // ---- account ------------------------------------------------------------
 
-    func signIn(email: String, password: String) async throws {
-        try await auth.signIn(email: email, password: password)
-        didSignIn()
-    }
-
-    func signInWithGoogle() {
+    /// Apple, Google or email: all on the site's sign-in page, in the browser.
+    func signInInBrowser() {
+        problem = nil
         waitingForBrowser = true
-        NSWorkspace.shared.open(auth.googleSignInURL())
+        NSWorkspace.shared.open(auth.signInURL())
     }
 
-    func sendPasswordReset(email: String) async throws {
-        try await auth.sendPasswordReset(email: email)
+    /// Where the ways to sign in are added and removed: the web app's settings.
+    func openSignInMethods() {
+        NSWorkspace.shared.open(Config.signInMethods)
     }
 
     private func didSignIn() {
@@ -578,6 +579,7 @@ final class AppModel: ObservableObject {
         createdDevice = nil
         signedIn = false
         email = nil
+        provider = nil
         myUID = nil
         inviteURL = nil
         contacts = []

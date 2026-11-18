@@ -20,10 +20,6 @@ enum AuthError: LocalizedError {
         case .server(let code):
             let code = code.components(separatedBy: " ").first ?? code
             switch code {
-            case "INVALID_PASSWORD": return tr("Неверный пароль. Если раньше вход был через Google, нажми «Назад» и «Войти через Google»")
-            case "WEAK_PASSWORD": return tr("Пароль слишком простой")
-            case "INVALID_EMAIL", "MISSING_EMAIL": return tr("Проверь адрес почты")
-            case "MISSING_PASSWORD": return tr("Введи пароль")
             case "TOO_MANY_ATTEMPTS_TRY_LATER": return tr("Слишком много попыток, попробуй чуть позже")
             case "USER_DISABLED": return tr("Этот аккаунт отключён")
             case "BAD_CALLBACK": return tr("Вход не завершился, попробуй ещё раз")
@@ -43,17 +39,18 @@ enum AuthError: LocalizedError {
     }
 }
 
-/// Firebase Auth over its REST API: email+password directly, Google through
-/// the site's /signin/ page, which hands the session back via lovearound://signin,
-/// sealed to a one-time key of ours (SignInBox.swift).
+/// Firebase Auth over its REST API. Signing in (Apple, Google or email) happens
+/// on the site's /signin/ page in the browser, which hands the session back via
+/// lovearound://signin, sealed to a one-time key of ours (SignInBox.swift).
 @MainActor
 final class Auth {
     private(set) var session: Session?
     private var idToken: String?
     private var expiresAt = Date.distantPast
     private var refreshing: Task<String, Error>?
-    private var googleState: String?
-    private var googleKey: SignInKey?
+    /// The sign-in page asked for and not answered yet: opening it again
+    /// reuses it, so whichever tab finishes first signs in.
+    private var pending: (url: URL, state: String, key: SignInKey)?
     private let file: URL
 
     init() {
@@ -104,64 +101,45 @@ final class Auth {
         return id
     }
 
-    // ---- email + password ---------------------------------------------------
-
-    /// Signs in, or creates the account when the email is new.
-    func signIn(email: String, password: String) async throws {
-        do {
-            try await emailCall("signInWithPassword", email: email, password: password)
-        } catch AuthError.server(let code) where code.hasPrefix("EMAIL_NOT_FOUND") || code.hasPrefix("INVALID_LOGIN_CREDENTIALS") {
-            // With email enumeration protection both cases look the same:
-            // try to create the account, and an existing email means a wrong password.
-            do {
-                try await emailCall("signUp", email: email, password: password)
-            } catch AuthError.server(let code) where code.hasPrefix("EMAIL_EXISTS") {
-                throw AuthError.server("INVALID_PASSWORD")
-            }
-        }
+    /// How this session signed in, from the ID token: "apple.com",
+    /// "google.com" or "password". Nil until a token has been fetched.
+    var provider: String? {
+        guard let idToken else { return nil }
+        let parts = idToken.split(separator: ".")
+        guard parts.count == 3 else { return nil }
+        var payload = parts[1].replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+        payload += String(repeating: "=", count: (4 - payload.count % 4) % 4)
+        guard let data = Data(base64Encoded: payload),
+              let claims = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let firebase = claims["firebase"] as? [String: Any] else { return nil }
+        return firebase["sign_in_provider"] as? String
     }
 
-    func sendPasswordReset(email: String) async throws {
-        _ = try await Self.post("accounts:sendOobCode", ["requestType": "PASSWORD_RESET", "email": email])
-    }
+    // ---- signing in, through the site ---------------------------------------
 
-    private func emailCall(_ method: String, email: String, password: String) async throws {
-        let json = try await Self.post("accounts:\(method)", ["email": email, "password": password, "returnSecureToken": true])
-        guard let uid = json["localId"] as? String,
-              let id = json["idToken"] as? String,
-              let refreshToken = json["refreshToken"] as? String else {
-            throw AuthError.server("BAD_RESPONSE")
-        }
-        adopt(Session(uid: uid, email: json["email"] as? String ?? email, refreshToken: refreshToken))
-        idToken = id
-        expiresAt = Date().addingTimeInterval(Double(json["expiresIn"] as? String ?? "") ?? 3600)
-    }
-
-    // ---- Google, through the site -------------------------------------------
-
-    /// The page that signs in with Google and returns to lovearound://signin,
-    /// with the session sealed to our one-time key.
-    func googleSignInURL() -> URL {
+    /// The page that signs in (Apple, Google or email) and returns to
+    /// lovearound://signin, with the session sealed to our one-time key.
+    func signInURL() -> URL {
+        if let pending { return pending.url }
         let state = UUID().uuidString
         let key = SignInKey()
-        googleState = state
-        googleKey = key
-        return URL(string: "\(Config.site)/signin?state=\(state)&key=\(key.publicKey)")!
+        let url = URL(string: "\(Config.site)/signin?state=\(state)&key=\(key.publicKey)")!
+        pending = (url, state, key)
+        return url
     }
 
     /// lovearound://signin?state=…&epk=…&box=…, the box holding uid, email and
     /// the refresh token. Only the box: the page sends them in the clear just
     /// to builds that open it without key=, and this one always sends a key.
-    func completeGoogle(_ url: URL) async throws {
+    func completeSignIn(_ url: URL) async throws {
         let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         let q = Dictionary(items.map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { a, _ in a })
         // The state proves the callback answers our own request, so a crafted
         // link cannot sign the app into someone else's account.
-        guard let state = googleState, q["state"] == state else { throw AuthError.server("BAD_CALLBACK") }
-        guard let sealed = googleKey?.open(epk: q["epk"] ?? "", box: q["box"] ?? "", state: state),
+        guard let pending, q["state"] == pending.state else { throw AuthError.server("BAD_CALLBACK") }
+        guard let sealed = pending.key.open(epk: q["epk"] ?? "", box: q["box"] ?? "", state: pending.state),
               !sealed.uid.isEmpty, !sealed.rt.isEmpty else { throw AuthError.server("BAD_CALLBACK") }
-        googleState = nil
-        googleKey = nil
+        self.pending = nil
         adopt(Session(uid: sealed.uid, email: sealed.email, refreshToken: sealed.rt))
         _ = try await token(forceRefresh: true)
     }
@@ -195,14 +173,6 @@ final class Auth {
         if !written || rename(temp.path, file.path) != 0 {
             try? FileManager.default.removeItem(at: temp)
         }
-    }
-
-    private static func post(_ method: String, _ body: [String: Any]) async throws -> [String: Any] {
-        var req = URLRequest(url: URL(string: "https://identitytoolkit.googleapis.com/v1/\(method)?key=\(Config.firebaseAPIKey)")!)
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
-        return try await call(req)
     }
 
     private static func call(_ req: URLRequest) async throws -> [String: Any] {

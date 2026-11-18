@@ -876,14 +876,22 @@ struct Avatar: View {
     let label: String
     let color: PaletteColor
     let size: CGFloat
+    /// An SF Symbol in place of the first letter.
+    var symbol: String? = nil
 
     var body: some View {
-        Text(label.first.map { String($0).uppercased() } ?? "♥")
-            .font(.system(size: size * 0.41, weight: .bold))
-            .foregroundColor(color.deepColor)
-            .frame(width: size, height: size)
-            .background(Circle().fill(Color.paper))
-            .overlay(Circle().strokeBorder(color.ringColor, lineWidth: 2.5))
+        Group {
+            if let symbol {
+                Image(systemName: symbol)
+            } else {
+                Text(label.first.map { String($0).uppercased() } ?? "♥")
+            }
+        }
+        .font(.system(size: size * 0.41, weight: .bold))
+        .foregroundColor(color.deepColor)
+        .frame(width: size, height: size)
+        .background(Circle().fill(Color.paper))
+        .overlay(Circle().strokeBorder(color.ringColor, lineWidth: 2.5))
     }
 }
 
@@ -891,14 +899,6 @@ struct Avatar: View {
 
 struct SignInView: View {
     @EnvironmentObject var model: AppModel
-    @State private var withEmail = false
-    @State private var email = ""
-    @State private var password = ""
-    @State private var busy = false
-    /// What went wrong: in red, right under the button.
-    @State private var message: String?
-    /// Good news, e.g. the reset email went out.
-    @State private var notice: String?
 
     var body: some View {
         VStack(spacing: 14) {
@@ -917,59 +917,41 @@ struct SignInView: View {
             }
             .padding(.top, 8)
 
-            if withEmail {
-                VStack(alignment: .leading, spacing: 10) {
-                    Field(title: tr("Почта")) {
-                        TextField("you@example.com", text: $email)
-                            .textContentType(.username)
-                    }
-                    Field(title: tr("Пароль")) {
-                        SecureField(tr("Не меньше 8 символов"), text: $password)
-                            .textContentType(.password)
-                            .onSubmit(submit)
-                    }
-                    Button(busy ? tr("Входим…") : tr("Войти или создать аккаунт"), action: submit)
+            // Apple, Google and email all happen on the site's sign-in page.
+            VStack(spacing: 10) {
+                if model.waitingForBrowser {
+                    Button(tr("Продолжи в браузере…")) {}
                         .buttonStyle(PrimaryButton())
-                        .disabled(busy)
-                    errorLine
-                    HStack {
-                        Button(tr("← Назад")) { withEmail = false; message = nil; notice = nil }
-                            .buttonStyle(.plain)
+                        .disabled(true)
+                    HStack(spacing: 4) {
+                        Text(tr("Страница не открылась?"))
                             .foregroundColor(.muted)
-                        Spacer()
-                        Button(tr("Забыли пароль?"), action: reset)
+                        Button(tr("Открыть ещё раз")) { model.signInInBrowser() }
                             .buttonStyle(.plain)
                             .foregroundColor(.link)
                     }
-                    .font(.system(size: 12.5))
-                }
-            } else {
-                VStack(spacing: 8) {
-                    Button {
-                        message = nil
-                        notice = nil
-                        model.signInWithGoogle()
-                    } label: {
-                        Label(model.waitingForBrowser ? tr("Продолжи в браузере…") : tr("Войти через Google"), systemImage: "globe")
+                    .font(.system(size: 12))
+                } else {
+                    Button { model.signInInBrowser() } label: {
+                        Label(tr("Войти через браузер"), systemImage: "globe")
                     }
                     .buttonStyle(PrimaryButton())
-                    Button(tr("Войти по почте")) { withEmail = true; message = nil; notice = nil }
-                        .buttonStyle(SecondaryButton())
-                    errorLine
+                    // Only what the page will offer: not buttons.
+                    HStack(spacing: 6) {
+                        SignInChip(title: "Google") { GoogleMark(size: 12) }
+                        SignInChip(title: "Apple") {
+                            Image(systemName: "applelogo").font(.system(size: 11)).foregroundColor(.ink)
+                        }
+                        SignInChip(title: tr("Почта")) {
+                            Image(systemName: "envelope").font(.system(size: 10.5))
+                        }
+                    }
                 }
-            }
-
-            if let notice {
-                Text(notice)
-                    .font(.system(size: 12))
-                    .foregroundColor(.ok)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+                errorLine
             }
 
             Divider()
             HStack {
-                Text(tr("Вход через Apple появится позже"))
                 Spacer()
                 Button(tr("Закрыть")) { NSApp.terminate(nil) }
                     .buttonStyle(.plain)
@@ -980,7 +962,7 @@ struct SignInView: View {
     }
 
     @ViewBuilder private var errorLine: some View {
-        if let text = message ?? model.problem {
+        if let text = model.problem {
             Label(text, systemImage: "exclamationmark.circle.fill")
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundColor(.danger)
@@ -989,39 +971,52 @@ struct SignInView: View {
                 .frame(maxWidth: .infinity, alignment: .center)
         }
     }
+}
 
-    private func submit() {
-        let email = email.trimmingCharacters(in: .whitespaces)
-        guard !email.isEmpty else { message = tr("Введи почту"); return }
-        guard email.contains("@") else { message = tr("Проверь адрес почты"); return }
-        guard password.count >= 8 else { message = tr("Пароль нужен не короче 8 символов"); return }
-        busy = true
-        message = nil
-        notice = nil
-        Task {
-            do {
-                try await model.signIn(email: email, password: password)
-                password = ""
-            } catch {
-                message = error.localizedDescription
-            }
-            busy = false
+/// A way to sign in that the browser page offers, under the sign-in button.
+struct SignInChip<Mark: View>: View {
+    let title: String
+    @ViewBuilder let mark: () -> Mark
+
+    var body: some View {
+        HStack(spacing: 5) {
+            mark()
+            Text(title)
         }
+        .font(.system(size: 12))
+        .foregroundColor(.muted)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(Capsule().fill(Color.field))
     }
+}
 
-    private func reset() {
-        let email = email.trimmingCharacters(in: .whitespaces)
-        guard !email.isEmpty else { message = tr("Сначала введи почту"); return }
-        message = nil
-        notice = nil
-        Task {
-            do {
-                try await model.sendPasswordReset(email: email)
-                notice = tr("Письмо для нового пароля отправлено")
-            } catch {
-                message = error.localizedDescription
+/// Google's "G", drawn: four coloured arcs and the bar.
+struct GoogleMark: View {
+    let size: CGFloat
+    /// Clockwise from three o'clock, the way Circle().trim runs.
+    private static let arcs: [(from: CGFloat, to: CGFloat, color: Color)] = [
+        (0, 0.12, Color(hex: 0x4285F4)),
+        (0.12, 0.40, Color(hex: 0x34A853)),
+        (0.40, 0.60, Color(hex: 0xFBBC05)),
+        (0.60, 0.875, Color(hex: 0xEA4335)),
+    ]
+
+    var body: some View {
+        let line = size * 0.22
+        ZStack {
+            ForEach(0..<Self.arcs.count, id: \.self) { i in
+                Circle()
+                    .trim(from: Self.arcs[i].from, to: Self.arcs[i].to)
+                    .stroke(Self.arcs[i].color, lineWidth: line)
+                    .frame(width: size - line, height: size - line)
             }
+            Rectangle()
+                .fill(Self.arcs[0].color)
+                .frame(width: size / 2, height: line)
+                .offset(x: size / 4)
         }
+        .frame(width: size, height: size)
     }
 }
 
@@ -1347,18 +1342,41 @@ struct SettingsView: View {
         }
     }
 
+    static func signedInWith(_ provider: String?) -> String {
+        switch provider {
+        case "apple.com": return tr("Вход через Apple")
+        case "google.com": return tr("Вход через Google")
+        case "password": return tr("Вход по почте")
+        default: return tr("Книга хранится в аккаунте")
+        }
+    }
+
     /// Who is signed in, the Love ID, and removing the account at the bottom.
     @ViewBuilder private var account: some View {
+        // Apple's relay address (…@privaterelay.appleid.com) means nothing to the person.
+        let hidden = model.email?.hasSuffix("@privaterelay.appleid.com") ?? false
         HStack(spacing: 12) {
-            Avatar(label: model.email ?? "", color: Palette.at(model.myColor), size: 40)
+            Avatar(label: model.email ?? "", color: Palette.at(model.myColor), size: 40,
+                   symbol: hidden ? "applelogo" : nil)
             VStack(alignment: .leading, spacing: 2) {
-                Text(model.email ?? "")
+                Text(hidden ? "Apple ID" : model.email ?? "")
                     .font(.system(size: 13.5, weight: .semibold))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(tr("Книга хранится в аккаунте"))
-                    .font(.system(size: 11.5))
-                    .foregroundColor(.faint)
+                Group {
+                    Text(hidden ? tr("Почту скрыл Apple") : Self.signedInWith(model.provider))
+                        .foregroundColor(.faint)
+                    Button { model.openSignInMethods() } label: {
+                        HStack(spacing: 2) {
+                            Text(tr("Способы входа"))
+                            Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .semibold))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.link)
+                }
+                .font(.system(size: 11.5))
+                .lineLimit(1)
             }
             Spacer(minLength: 8)
             Button(tr("Выйти")) { model.signOut() }
