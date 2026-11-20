@@ -1051,6 +1051,7 @@ struct ContactForm: View {
     @State private var error: String?
     @State private var confirmDelete = false
     @State private var saved = false
+    @State private var copied = false
 
     private var editing: Contact? {
         if case .edit(let contact) = mode { return contact }
@@ -1068,7 +1069,7 @@ struct ContactForm: View {
             }
 
             if editing == nil {
-                Field(title: tr("Ссылка-приглашение")) {
+                Field(title: tr("Ссылка-приглашение"), bad: own) {
                     TextField("lovearound.me/i/…", text: $link)
                 }
                 lookupNote
@@ -1079,6 +1080,8 @@ struct ContactForm: View {
             Field(title: tr("Как назовёшь?")) {
                 TextField(tr("Например, Мама"), text: $name)
             }
+            .opacity(own ? 0.4 : 1)
+            .disabled(own)
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -1090,6 +1093,8 @@ struct ContactForm: View {
                 }
                 SwatchPicker(selection: $color, size: 30)
             }
+            .opacity(own ? 0.4 : 1)
+            .disabled(own)
 
             if let contact = editing {
                 if confirmDelete {
@@ -1170,8 +1175,56 @@ struct ContactForm: View {
     private var canSave: Bool {
         guard (1...64).contains(label.count) else { return false }
         if editing != nil { return true }
-        if case .ready = lookup { return true }
+        if case .ready = lookup { return !own }
         return false
+    }
+
+    /// One's own link, pasted to add oneself: said at once, with the way to send it instead.
+    private var own: Bool {
+        guard editing == nil, case .ready(let code) = lookup,
+              let mine = model.inviteURL.flatMap(AppModel.inviteID(from:)) else { return false }
+        let bare = { (code: String) in code.uppercased().filter { $0 != "-" } }
+        return bare(code) == bare(mine)
+    }
+
+    /// Under the link field when it holds one's own link: what it is for, a
+    /// copy of it with the line to send along, and a way out.
+    private var ownNote: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: "exclamationmark.circle.fill").foregroundColor(.danger)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(tr("Это твоя собственная ссылка"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.danger)
+                    Text(tr("Отправь её тому, кто будет о тебе думать."))
+                        .foregroundColor(.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            HStack(spacing: 8) {
+                Button(action: copyOwn) {
+                    Label(copied ? tr("Скопировано") : tr("Скопировать"), systemImage: copied ? "checkmark" : "doc.on.doc")
+                }
+                .buttonStyle(PillButton(danger: true))
+                Button(tr("Очистить")) { link = "" }
+                    .buttonStyle(PillButton())
+            }
+        }
+        .padding(11)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.dangerSoft))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.danger.opacity(0.3)))
+    }
+
+    private func copyOwn() {
+        guard let url = model.inviteURL else { return }
+        model.copy("\(InviteRow.message)\n\(url)")
+        copied = true
+        Task {
+            try? await Task.sleep(nanoseconds: 1_600_000_000)
+            copied = false
+        }
     }
 
     @ViewBuilder
@@ -1182,7 +1235,11 @@ struct ContactForm: View {
         case .invalid:
             Text(tr("Не похоже на ссылку-приглашение")).foregroundColor(.muted)
         case .ready:
-            Label(tr("Ссылка в порядке. Осталось подписать."), systemImage: "checkmark").foregroundColor(.ok)
+            if own {
+                ownNote
+            } else {
+                Label(tr("Ссылка в порядке. Осталось подписать."), systemImage: "checkmark").foregroundColor(.ok)
+            }
         }
     }
 
@@ -1559,6 +1616,8 @@ struct SwatchPicker: View {
 
 struct Field<Content: View>: View {
     let title: String
+    /// Red: what's in it can't be used (one's own link to add).
+    var bad = false
     @ViewBuilder let content: Content
 
     var body: some View {
@@ -1567,10 +1626,11 @@ struct Field<Content: View>: View {
             content
                 .textFieldStyle(.plain)
                 .font(.system(size: 13.5))
+                .foregroundColor(bad ? Color.danger : nil)
                 .padding(.horizontal, 10)
                 .frame(height: 34)
-                .background(RoundedRectangle(cornerRadius: 8).fill(Color.input))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.hairline))
+                .background(RoundedRectangle(cornerRadius: 8).fill(bad ? Color.dangerSoft : Color.input))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(bad ? Color.danger : Color.hairline, lineWidth: bad ? 2 : 1))
         }
     }
 }

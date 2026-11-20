@@ -86,6 +86,8 @@ extension Color {
     static let heartDeep = dynamic(0x8E2537, 0xFFB8C2)
     static let ok = dynamic(0x39744A, 0x8DCB9B)
     static let danger = dynamic(0xB3261E, 0xFF8A80)
+    /// Behind something that can't be used: one's own link in "add by link".
+    static let dangerSoft = dynamic(0xFCEAE8, 0x442E29)
     static let hairline = dynamic(0x54301E, 0xFFEBDC, alpha: (0.22, 0.16))
     static let switchOn = Color(hex: 0x3FA05A)
     static let star = dynamic(0xD99A1E, 0xE8B54F)
