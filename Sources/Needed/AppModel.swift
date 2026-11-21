@@ -534,6 +534,17 @@ final class AppModel: ObservableObject {
 
     // ---- links --------------------------------------------------------------
 
+    /// Downloaded from someone's Love ID page: the page put the link on the
+    /// clipboard, so the first launch on this Mac opens «Добавить» with it
+    /// (after signing in). Only the first launch looks; nothing leaves the Mac.
+    func offerPastedInviteOnFirstLaunch() {
+        let defaults = UserDefaults.standard
+        let first = !defaults.bool(forKey: "launchedBefore")
+        defaults.set(true, forKey: "launchedBefore")
+        guard first, !signedIn, let invite = pastedInvite else { return }
+        openAdding(invite)
+    }
+
     private func openAdding(_ invite: String) {
         if signedIn {
             route = .add(invite: invite)

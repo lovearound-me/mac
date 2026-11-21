@@ -78,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         model.start()
+        model.offerPastedInviteOnFirstLaunch()
         if Strings.reopenSettings && model.signedIn {
             openSettings()
         } else if !model.signedIn || model.route != .main {
