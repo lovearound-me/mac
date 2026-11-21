@@ -169,7 +169,10 @@ final class StatusBar: NSObject, NSPopoverDelegate {
         popover.performClose(nil)
         let menu = NSMenu()
         if model.signedIn {
-            if model.isPaused {
+            if !model.receiveHere {
+                menu.addItem(NSMenuItem(title: tr("Не получает сердечки"), action: nil, keyEquivalent: ""))
+                menu.addItem(menuItem(tr("Получать сердечки снова"), #selector(receiveAgain)))
+            } else if model.isPaused {
                 // No action: shown greyed, as a status line.
                 menu.addItem(NSMenuItem(title: model.pauseText, action: nil, keyEquivalent: ""))
                 menu.addItem(menuItem(tr("Снять паузу"), #selector(resume)))
@@ -199,6 +202,7 @@ final class StatusBar: NSObject, NSPopoverDelegate {
     }
 
     @objc private func resume() { model.resume() }
+    @objc private func receiveAgain() { model.receiveHere = true }
     @objc private func pauseHour() { model.pause(.hour) }
     @objc private func pauseUntilMorning() { model.pause(.untilMorning) }
     @objc private func pauseUntilResumed() { model.pause(.untilResumed) }
@@ -218,9 +222,11 @@ final class StatusBar: NSObject, NSPopoverDelegate {
     }
 
     func updateIcon() {
-        let name = model.isPaused ? "heart.slash.circle" : "heart.circle.fill"
+        // Not receiving here looks like a pause that is never lifted.
+        let off = model.isPaused || !model.receiveHere
+        let name = off ? "heart.slash.circle" : "heart.circle.fill"
         let config = NSImage.SymbolConfiguration(pointSize: 15, weight: .regular)
-        guard let base = NSImage(systemSymbolName: name, accessibilityDescription: model.isPaused ? tr("Сердечко на паузе") : tr("Сердечко")) else { return }
+        guard let base = NSImage(systemSymbolName: name, accessibilityDescription: off ? tr("Сердечко на паузе") : tr("Сердечко")) else { return }
         if let tint {
             let image = base.withSymbolConfiguration(config.applying(NSImage.SymbolConfiguration(hierarchicalColor: tint)))
             image?.isTemplate = false

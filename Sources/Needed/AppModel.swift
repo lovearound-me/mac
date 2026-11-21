@@ -56,9 +56,28 @@ final class AppModel: ObservableObject {
     @Published var acceptAnyone: Bool {
         didSet {
             defaults.set(acceptAnyone, forKey: "acceptAnyone")
-            stream.anyone = acceptAnyone
-            stream.restart()
+            anyoneChanged()
         }
+    }
+    /// "Получать сердечки на этом Mac": off, no signal shows here at all and the
+    /// stream asks for none to anyone; sending still works.
+    @Published var receiveHere: Bool {
+        didSet {
+            defaults.set(receiveHere, forKey: "receiveHere")
+            anyoneChanged()
+            onIconChange()
+        }
+    }
+    /// "Кружки в меню": each circle with its name under it, not only on hover.
+    @Published var circleNames: Bool { didSet { defaults.set(circleNames, forKey: "circleNames") } }
+
+    /// The stream asks for signals to anyone only while this Mac shows them.
+    private var takesAnyone: Bool { acceptAnyone && receiveHere }
+
+    private func anyoneChanged() {
+        guard stream.anyone != takesAnyone else { return }
+        stream.anyone = takesAnyone
+        stream.restart()
     }
     /// When this Mac last sent a signal to anyone: one an hour.
     @Published private(set) var anyoneSentAt: Date? { didSet { defaults.set(anyoneSentAt, forKey: "anyoneSentAt") } }
@@ -101,12 +120,14 @@ final class AppModel: ObservableObject {
         quietWhenPresenting = defaults.object(forKey: "quietWhenPresenting") as? Bool ?? true
         minGap = Self.gaps[Self.gapIndex(defaults.object(forKey: "minGap") as? TimeInterval ?? 1)]
         acceptAnyone = defaults.object(forKey: "acceptAnyone") as? Bool ?? true
+        receiveHere = defaults.object(forKey: "receiveHere") as? Bool ?? true
+        circleNames = defaults.object(forKey: "circleNames") as? Bool ?? false
         anyoneSentAt = defaults.object(forKey: "anyoneSentAt") as? Date
         defaults.removeObject(forKey: "contactColors") // kept on the server now
         lastSent = defaults.dictionary(forKey: "lastSent") as? [String: Date] ?? [:]
         pausedUntil = defaults.object(forKey: "pausedUntil") as? Date
 
-        stream.anyone = acceptAnyone
+        stream.anyone = takesAnyone
         stream.onSignal = { [weak self] in self?.receive() }
         stream.onAuthLost = { [weak self] in self?.signOut() }
         stream.onOnline = { [weak self] up in self?.connectionChanged(up) }
@@ -249,7 +270,7 @@ final class AppModel: ObservableObject {
     }
 
     private func receive() {
-        guard !isPaused else { return }
+        guard !isPaused, receiveHere else { return }
         // Not shown, and not saved for later: a signal is about the moment.
         if quietWhenPresenting && Presenting.now { return }
         // The server lets one signal per sender through each second; a rarer

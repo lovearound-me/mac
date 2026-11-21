@@ -51,7 +51,14 @@ struct MainView: View {
                 Banner(symbol: "wifi.slash", text: tr("Нет связи с сервером, сигналы сейчас не приходят. Переподключаемся…"))
             }
 
-            if model.isPaused {
+            if !model.receiveHere {
+                Banner(symbol: "moon.fill", text: tr("Этот Mac не получает сердечки.")) {
+                    Button(tr("Включить")) { model.receiveHere = true }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundColor(.link)
+                }
+            } else if model.isPaused {
                 Banner(symbol: "moon.fill", text: tr("{pause}. Сигналы не придут.", ["pause": model.pauseText])) {
                     Button(tr("Снять")) { model.resume() }
                         .buttonStyle(.plain)
@@ -350,15 +357,23 @@ struct CloseCircles: View {
     @State private var hovered: String?
     @State private var dragging: Contact?
 
-    private let columns = Array(repeating: GridItem(.fixed(50), spacing: 13), count: 5)
+    /// Settings → "Кружки в меню": bare circles (the name in the caption on
+    /// hover), or each with its name under it.
+    private var named: Bool { model.circleNames }
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.fixed(named ? 58 : 50), spacing: named ? 6 : 13), count: 5)
+    }
 
     var body: some View {
         let close = model.closeContacts
         VStack(spacing: 4) {
             LazyVGrid(columns: columns, spacing: 10) {
                 AnyoneCircle(hovered: $hovered)
+                    .modifier(CircleName(name: tr("Кому-то"), shown: named))
                 ForEach(close) { contact in
                     CloseCircle(contact: contact, hovered: $hovered)
+                        .modifier(CircleName(name: contact.label, shown: named,
+                                             color: model.sent == contact.id ? model.color(for: contact).deepColor : nil))
                         .onDrag {
                             dragging = contact
                             return NSItemProvider(object: contact.id as NSString)
@@ -382,14 +397,19 @@ struct CloseCircles: View {
                 .buttonStyle(.plain)
                 .help(model.contacts.isEmpty ? tr("Добавить по ссылке") : tr("Добавить кружок"))
                 .accessibilityLabel(model.contacts.isEmpty ? tr("Добавить по ссылке") : tr("Добавить кружок"))
+                .modifier(CircleName(name: "", shown: named))
             }
             .padding(.top, 4)
 
             TimelineView(.periodic(from: .now, by: 10)) { context in
-                caption(close, at: context.date)
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .lineLimit(1)
-                    .frame(height: 18)
+                // With names under the circles the caption only says what just happened.
+                let justSent = model.anyoneSentAt.map { context.date.timeIntervalSince($0) < 120 } ?? false
+                if !named || model.sent != nil || hovered == AnyoneCircle.id || justSent {
+                    caption(close, at: context.date)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .lineLimit(1)
+                        .frame(height: 18)
+                }
             }
         }
         .frame(maxWidth: .infinity)
@@ -410,6 +430,29 @@ struct CloseCircles: View {
                 .foregroundColor(.faint)
         } else {
             Text(" ")
+        }
+    }
+}
+
+/// A circle's name under it, when Settings → "Кружки в меню" says so.
+private struct CircleName: ViewModifier {
+    let name: String
+    let shown: Bool
+    var color: Color?
+
+    func body(content: Content) -> some View {
+        if shown {
+            VStack(spacing: 5) {
+                content
+                Text(name.isEmpty ? " " : name)
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundColor(color ?? .muted)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 58)
+            }
+        } else {
+            content
         }
     }
 }
@@ -1354,10 +1397,24 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+
+        VStack(alignment: .leading, spacing: 8) {
+            Caption(tr("Кружки в меню"))
+            HStack(spacing: 8) {
+                LookCard(title: tr("Только кружки"), names: false, on: !model.circleNames) { model.circleNames = false }
+                LookCard(title: tr("С именами"), names: true, on: model.circleNames) { model.circleNames = true }
+            }
+        }
     }
 
     /// When signals are shown at all.
     @ViewBuilder private var whenTab: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            SwitchRow(title: tr("Получать сердечки на этом Mac"), isOn: $model.receiveHere)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.field))
+            Note(tr("Выключишь, и этот Mac не засветится. iPhone, часы и игрушки получают как раньше. Отправлять сердечки он может всегда."))
+        }
+
         VStack(alignment: .leading, spacing: 8) {
             Caption(model.isPaused ? model.pauseText : tr("Пауза"))
             HStack(spacing: 6) {
@@ -1741,5 +1798,40 @@ struct SmallButton: ButtonStyle {
             .background(RoundedRectangle(cornerRadius: 8).fill(configuration.isPressed ? Color.field : Color.paper))
             .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.hairline))
             .contentShape(Rectangle())
+    }
+}
+
+/// One of the two looks of "Кружки в меню", with a small picture of it.
+private struct LookCard: View {
+    let title: String
+    let names: Bool
+    let on: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    ForEach([1, 3, 4, 5], id: \.self) { index in
+                        VStack(spacing: 3) {
+                            Circle().fill(Color(nsColor: NSColor(hex: Palette.at(index).color))).frame(width: 18, height: 18)
+                            if names {
+                                RoundedRectangle(cornerRadius: 1.5).fill(Color.faint).frame(width: 16, height: 3)
+                            }
+                        }
+                    }
+                }
+                .frame(height: 26, alignment: .top)
+                Text(title)
+                    .font(.system(size: 12.5, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(Color.field))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(on ? Color.link : .clear, lineWidth: 2))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
     }
 }
