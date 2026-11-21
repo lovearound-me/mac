@@ -94,7 +94,17 @@ if [[ -n "$SIGN_ID" ]]; then
   sign "$FW/Versions/B/Autoupdate"
   sign "$FW/Versions/B/Updater.app"
   sign "$FW"
-  sign "$APP"
+  # Love ID links need the Associated Domains entitlement, which a Developer ID
+  # app may only carry with its profile inside. Without the profile the app
+  # is signed as before and the links open the site instead.
+  PROFILE=Resources/LoveAround.provisionprofile
+  if [[ -f "$PROFILE" ]]; then
+    cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
+    sign --entitlements Resources/LoveAround.entitlements "$APP"
+  else
+    echo "   (no $PROFILE: Love ID links will open the site, not the app)"
+    sign "$APP"
+  fi
   codesign --verify --strict --deep "$APP"
 else
   echo ">> ad-hoc signing (no Developer ID Application identity in the keychain)"

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Love ID links (https://lovearound.me/i/…) open the app; the site lists
+	     the app in /.well-known/apple-app-site-association. Needs the Developer ID
+	     profile Resources/LoveAround.provisionprofile, which allows it. -->
+	<key>com.apple.application-identifier</key>
+	<string>CY8GRX7426.me.lovearound.mac</string>
+	<key>com.apple.developer.team-identifier</key>
+	<string>CY8GRX7426</string>
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:lovearound.me</string>
+	</array>
+</dict>
+</plist>

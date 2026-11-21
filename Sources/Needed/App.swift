@@ -89,6 +89,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         urls.forEach(model.handle(url:))
     }
 
+    // A Love ID link clicked in Safari, Messages, Mail or Telegram (universal link).
+    func application(_ application: NSApplication, continue userActivity: NSUserActivity,
+                     restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
+        guard userActivity.activityType == NSUserActivityTypeBrowsingWeb,
+              let url = userActivity.webpageURL else { return false }
+        model.handle(url: url)
+        return true
+    }
+
     @objc func openSettings() {
         guard model.signedIn else { return }
         status.close()

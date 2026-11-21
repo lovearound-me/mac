@@ -513,18 +513,28 @@ final class AppModel: ObservableObject {
 
     // ---- links --------------------------------------------------------------
 
+    private func openAdding(_ invite: String) {
+        if signedIn {
+            route = .add(invite: invite)
+        } else {
+            pendingAdd = invite
+        }
+        onShowMenu()
+    }
+
     func handle(url: URL) {
+        // A Love ID link, https://lovearound.me/i/<code>: macOS hands it over
+        // when the site lets the app take these (apple-app-site-association).
+        if url.scheme == "https", url.host == URL(string: Config.site)?.host, url.path.contains("/i/") {
+            if let invite = Self.inviteID(from: url.absoluteString) { openAdding(invite) }
+            return
+        }
         guard let scheme = url.scheme, Config.urlSchemes.contains(scheme) else { return }
         switch url.host {
         case "add":
             // The whole link, not url.path: its leading "/" would leave inviteID an empty id.
             guard let invite = Self.inviteID(from: url.absoluteString) else { return }
-            if signedIn {
-                route = .add(invite: invite)
-            } else {
-                pendingAdd = invite
-            }
-            onShowMenu()
+            openAdding(invite)
         case "signin":
             // The browser can hand over the same link twice (the page's own
             // redirect, then its "back" button, or a restored tab): the first
